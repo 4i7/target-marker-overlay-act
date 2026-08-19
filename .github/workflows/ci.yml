@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build ACT API stub
+        shell: pwsh
+        run: dotnet build .\ci\AdvancedCombatTrackerStub\AdvancedCombatTrackerStub.csproj -c Release
+
+      - name: Build plugin
+        shell: pwsh
+        run: |
+          $actStub = Join-Path $env:GITHUB_WORKSPACE 'ci\AdvancedCombatTrackerStub\bin\Release\net48\Advanced Combat Tracker.dll'
+          dotnet build .\src\TargetMarkerOverlay\TargetMarkerOverlay.csproj -c Release "-p:ActPath=$actStub"
+
+      - name: Run core tests
+        shell: pwsh
+        run: |
+          $actStub = Join-Path $env:GITHUB_WORKSPACE 'ci\AdvancedCombatTrackerStub\bin\Release\net48\Advanced Combat Tracker.dll'
+          dotnet run --project .\tests\CoreTests\CoreTests.csproj -c Release "-p:ActPath=$actStub"

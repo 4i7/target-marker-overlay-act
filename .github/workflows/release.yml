@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build ACT API stub
+        shell: pwsh
+        run: dotnet build .\ci\AdvancedCombatTrackerStub\AdvancedCombatTrackerStub.csproj -c Release
+
+      - name: Build plugin
+        shell: pwsh
+        run: |
+          $actStub = Join-Path $env:GITHUB_WORKSPACE 'ci\AdvancedCombatTrackerStub\bin\Release\net48\Advanced Combat Tracker.dll'
+          dotnet build .\src\TargetMarkerOverlay\TargetMarkerOverlay.csproj -c Release "-p:ActPath=$actStub"
+
+      - name: Run core tests
+        shell: pwsh
+        run: |
+          $actStub = Join-Path $env:GITHUB_WORKSPACE 'ci\AdvancedCombatTrackerStub\bin\Release\net48\Advanced Combat Tracker.dll'
+          dotnet run --project .\tests\CoreTests\CoreTests.csproj -c Release "-p:ActPath=$actStub"
+
+      - name: Package release assets
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          .\scripts\package-release.ps1 -Version $version
+
+      - name: Publish stable GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          gh release create $env:GITHUB_REF_NAME `
+            ".\release\TargetMarkerOverlay-v$version.zip" `
+            ".\release\SHA256SUMS.txt" `
+            --verify-tag --generate-notes --title "Target Marker Overlay v$version"
